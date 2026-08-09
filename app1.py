@@ -20,21 +20,19 @@ RATES = {
 # ============================
 # COLUMN DEFINITIONS
 # ============================
-columns = [
-    "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity",
-    "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
+input_columns = [
+    "Broker", "Stock / Scrip", "Trade Type", "Funding Type",
+    "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"
+]
+
+calculated_columns = [
     "Purchase Value", "Sale Value", "Gross P/L", "Buy Brokerage", "Sell Brokerage",
     "STT - Buy", "STT - Sell", "Stamp Duty", "Exchange Charges", "SEBI Charges",
     "GST", "Total Charges", "Interest Cost", "Net P/L", "Net Return %",
     "Break-even Sale Price"
 ]
 
-editable_cols = [
-    "Broker", "Stock / Scrip", "Trade Type", "Funding Type",
-    "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"
-]
-
-calculated_cols = [c for c in columns if c not in editable_cols]
+all_columns = input_columns + calculated_columns
 
 # ============================
 # INITIAL 4 ROWS
@@ -42,22 +40,12 @@ calculated_cols = [c for c in columns if c not in editable_cols]
 initial_data = []
 for i in range(4):
     initial_data.append([
-        "Kotak",
-        "",
-        "Delivery",
-        "Cash",
-        0,
-        None,
-        0.0,
-        None,
-        0.0,
-        *([0.0] * 16)
+        "Kotak", "", "Delivery", "Cash",
+        0, None, 0.0, None, 0.0,
+        *([0.0] * len(calculated_columns))
     ])
 
-df = pd.DataFrame(initial_data, columns=columns)
-
-# FIX: Change index to 1,2,3,4
-df.index = df.index + 1
+df = pd.DataFrame(initial_data, columns=all_columns)
 
 # ============================
 # CALCULATION LOGIC
@@ -78,7 +66,6 @@ def compute_row(row):
     sale_value = qty * sell_price
     gross_pl = sale_value - purchase_value
 
-    # Rates
     br = RATES["brokerage"][broker][trade_type]
     stt_b = RATES["stt_buy"][broker][trade_type]
     stt_s = RATES["stt_sell"][broker][trade_type]
@@ -98,7 +85,6 @@ def compute_row(row):
     gst = (buy_brokerage + sell_brokerage + exchange_charges + sebi_charges) * gst_rate
     total_charges = buy_brokerage + sell_brokerage + stt_buy + stt_sell + stamp_duty + exchange_charges + sebi_charges + gst
 
-    # Interest
     if funding_type == "Margin" and purchase_date:
         if sale_date:
             days = (sale_date - purchase_date).days
@@ -110,28 +96,26 @@ def compute_row(row):
 
     net_pl = gross_pl - total_charges - interest_cost
     net_return = (net_pl / purchase_value) if purchase_value else 0
-
     break_even = ((purchase_value + total_charges + interest_cost) / qty) if qty > 0 else 0
 
-    # Round everything to 2 decimals
-    return {k: round(v, 2) for k, v in {
-        "Purchase Value": purchase_value,
-        "Sale Value": sale_value,
-        "Gross P/L": gross_pl,
-        "Buy Brokerage": buy_brokerage,
-        "Sell Brokerage": sell_brokerage,
-        "STT - Buy": stt_buy,
-        "STT - Sell": stt_sell,
-        "Stamp Duty": stamp_duty,
-        "Exchange Charges": exchange_charges,
-        "SEBI Charges": sebi_charges,
-        "GST": gst,
-        "Total Charges": total_charges,
-        "Interest Cost": interest_cost,
-        "Net P/L": net_pl,
-        "Net Return %": net_return * 100,
-        "Break-even Sale Price": break_even
-    }.items()}
+    return {
+        "Purchase Value": round(purchase_value, 2),
+        "Sale Value": round(sale_value, 2),
+        "Gross P/L": round(gross_pl, 2),
+        "Buy Brokerage": round(buy_brokerage, 2),
+        "Sell Brokerage": round(sell_brokerage, 2),
+        "STT - Buy": round(stt_buy, 2),
+        "STT - Sell": round(stt_sell, 2),
+        "Stamp Duty": round(stamp_duty, 2),
+        "Exchange Charges": round(exchange_charges, 2),
+        "SEBI Charges": round(sebi_charges, 2),
+        "GST": round(gst, 2),
+        "Total Charges": round(total_charges, 2),
+        "Interest Cost": round(interest_cost, 2),
+        "Net P/L": round(net_pl, 2),
+        "Net Return %": round(net_return * 100, 2),
+        "Break-even Sale Price": round(break_even, 2)
+    }
 
 # ============================
 # UI
@@ -139,39 +123,33 @@ def compute_row(row):
 st.title("Trade Calculator App")
 st.write("Yellow = Input columns, Green = Calculated columns")
 
-# Correct column_config (NO styling)
-column_config = {}
+# Column config for input table
+column_config_input = {}
 
-# Editable text columns
 for col in ["Broker", "Stock / Scrip", "Trade Type", "Funding Type"]:
-    column_config[col] = st.column_config.TextColumn(col)
+    column_config_input[col] = st.column_config.TextColumn(col)
 
-# Editable numeric columns
 for col in ["Quantity", "Purchase Price", "Sale Price"]:
-    column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
+    column_config_input[col] = st.column_config.NumberColumn(col, format="%.2f")
 
-# Editable date columns
 for col in ["Purchase Date", "Sale Date"]:
-    column_config[col] = st.column_config.DateColumn(col)
+    column_config_input[col] = st.column_config.DateColumn(col)
 
-# Calculated numeric columns (disabled)
-for col in calculated_cols:
-    column_config[col] = st.column_config.NumberColumn(
-        col,
-        disabled=True,
-        format="%.2f"
-    )
+# ============================
+# FIRST TABLE (ONLY INPUT COLUMNS)
+# ============================
+input_df = df[input_columns]
 
 edited = st.data_editor(
-    df,
+    input_df,
     key="trade_editor",
-    column_config=column_config,
+    column_config=column_config_input,
     use_container_width=True,
     hide_index=False
 )
 
 # ============================
-# COMPUTE ALL ROWS
+# COMPUTE OUTPUT
 # ============================
 computed = edited.copy()
 
