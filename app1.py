@@ -136,33 +136,9 @@ def compute_row(row):
 st.title("Trade Calculator App")
 st.write("Yellow = Input columns, Green = Calculated columns")
 
-# Column coloring
-column_styles = {}
-
-for col in editable_cols:
-    column_styles[col] = st.column_config.TextColumn(
-        col,
-        help="Input column",
-        width="medium",
-        required=False,
-        disabled=False,
-        style={"backgroundColor": "#FFFACD"}  # Light Yellow
-    )
-
-for col in calculated_cols:
-    column_styles[col] = st.column_config.NumberColumn(
-        col,
-        help="Calculated output",
-        width="medium",
-        disabled=True,
-        format="%.2f",
-        style={"backgroundColor": "#DFFFD6"}  # Light Green
-    )
-
 edited = st.data_editor(
     df,
     key="trade_editor",
-    column_config=column_styles,
     use_container_width=True
 )
 
@@ -177,6 +153,20 @@ for idx, row in computed.iterrows():
         computed.at[idx, col] = val
 
 # ============================
+# COLOR STYLING (OUTPUT ONLY)
+# ============================
+def highlight_cells(val, col):
+    if col in editable_cols:
+        return "background-color: #FFFACD"  # Yellow
+    else:
+        return "background-color: #DFFFD6"  # Green
+
+styled = computed.style.apply(
+    lambda row: [highlight_cells(row[col], col) for col in computed.columns],
+    axis=1
+).format("{:.2f}")
+
+# ============================
 # SUMMARY
 # ============================
 st.subheader("Summary")
@@ -189,5 +179,5 @@ c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Qua
 # ============================
 # OUTPUT TABLE
 # ============================
-st.subheader("Calculated Outputs")
-st.dataframe(computed, use_container_width=True, hide_index=True)
+st.subheader("Calculated Outputs (Colored)")
+st.dataframe(styled, use_container_width=True)
