@@ -85,7 +85,8 @@ def calculate_trade(data: dict) -> dict:
     sebi = (buy_value + sell_value) * r["sebi"]
     gst = (buy_brokerage + sell_brokerage + exchange + sebi) * r["gst"]
 
-    # OPTION B — Interest even if sale not completed
+    # Interest logic (Option B)
+    # If sale not completed → use today's date
     end_date = sale_date if sale_date else date.today()
     days = max((end_date - purchase_date).days, 0)
     interest = buy_value * 0.10 * days / 365 if funding == "Margin" else 0.0
@@ -169,6 +170,7 @@ for i, col in enumerate(trade_columns, start=1):
         sale_date = st.date_input("Sale Date", value=date.today(), disabled=not sale_completed, key=f"sdate_{i}")
         sale_price = st.number_input("Sale Price", min_value=0.0, step=0.01, format="%.2f", disabled=not sale_completed, key=f"sprice_{i}")
 
+        # FIX: If sale not completed → assume today's date for interest
         payload = {
             "Broker": broker,
             "Stock / Scrip": scrip,
@@ -177,7 +179,7 @@ for i, col in enumerate(trade_columns, start=1):
             "Quantity": quantity,
             "Purchase Date": purchase_date,
             "Purchase Price": purchase_price,
-            "Sale Date": sale_date if sale_completed else None,
+            "Sale Date": sale_date if sale_completed else date.today(),
             "Sale Price": sale_price if sale_completed else 0.0,
         }
 
@@ -197,3 +199,4 @@ if all_results:
     c1.metric("Purchase Value", money(total_purchase))
     c2.metric("Total Charges", money(total_charges))
     c3.metric("Net Profit / (Loss)", money(total_net))
+
