@@ -24,7 +24,7 @@ columns = [
     "Break-even Sale Price"
 ]
 
-# Build a default DataFrame with 20 rows.
+# Build a default DataFrame with correct dtypes
 initial_data = []
 for i in range(20):
     initial_data.append([
@@ -32,13 +32,13 @@ for i in range(20):
         "",
         "Delivery",
         "Margin" if i == 0 else "Cash",
-        100 if i == 0 else 0,
+        int(100 if i == 0 else 0),          # Quantity must be int
         date(2026, 7, 9) if i == 0 else None,
-        1000 if i == 0 else 0,
+        float(1000 if i == 0 else 0),
         None,
-        1200 if i == 0 else 0,
-        # 16 calculated fields (matching 16 calculated columns)
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        float(1200 if i == 0 else 0),
+        # 16 calculated fields (all floats)
+        *([0.0] * 16)
     ])
 
 df = pd.DataFrame(initial_data, columns=columns)
@@ -48,14 +48,14 @@ def compute_row(row):
     broker = row["Broker"]
     trade_type = row["Trade Type"]
     funding_type = row["Funding Type"]
-    quantity = row["Quantity"]
+    quantity = int(row["Quantity"]) if row["Quantity"] else 0
     purchase_date = row["Purchase Date"]
-    purchase_price = row["Purchase Price"]
+    purchase_price = float(row["Purchase Price"]) if row["Purchase Price"] else 0
     sale_date = row["Sale Date"]
-    sale_price = row["Sale Price"]
+    sale_price = float(row["Sale Price"]) if row["Sale Price"] else 0
 
-    purchase_value = quantity * purchase_price if quantity and purchase_price else 0
-    sale_value = quantity * sale_price if quantity and sale_price else 0
+    purchase_value = quantity * purchase_price
+    sale_value = quantity * sale_price
     gross_pl = sale_value - purchase_value
 
     broker_rate = RATES["brokerage"][broker][trade_type]
