@@ -1,8 +1,6 @@
-from flask import Flask, render_template_string, request
+import streamlit as st
 
-app = Flask(__name__)
-
-# ---- Charges & Rates (from your sheet) ----
+# ---- Charges & Rates ----
 RATES = {
     "KOTAK_DELIVERY": {
         "brokerage_per_leg": 1e-3,
@@ -26,46 +24,6 @@ RATES = {
     }
 }
 
-HTML = """
-<!doctype html>
-<title>Equity Profit Calculator</title>
-<h2>Equity Trade – Net Profit Calculator</h2>
-<form method="post">
-  <label>Broker:</label>
-  <select name="broker">
-    <option value="KOTAK_DELIVERY">Kotak Delivery</option>
-    <option value="ZERODHA_DELIVERY">Zerodha Delivery</option>
-  </select><br><br>
-
-  <label>Quantity:</label>
-  <input type="number" name="qty" step="1" required><br><br>
-
-  <label>Purchase Price:</label>
-  <input type="number" name="buy_price" step="0.01" required><br><br>
-
-  <label>Sale Price:</label>
-  <input type="number" name="sell_price" step="0.01" required><br><br>
-
-  <label>Interest Cost (₹):</label>
-  <input type="number" name="interest" step="0.01" value="0"><br><br>
-
-  <button type="submit">Calculate</button>
-</form>
-
-{% if result %}
-<hr>
-<h3>Result</h3>
-<p>Purchase Value: ₹{{ result.purchase_value }}</p>
-<p>Sale Value: ₹{{ result.sale_value }}</p>
-<p>Gross P/L: ₹{{ result.gross_pl }}</p>
-<p>Total Charges: ₹{{ result.total_charges }}</p>
-<p>Interest Cost: ₹{{ result.interest_cost }}</p>
-<p><b>Net P/L: ₹{{ result.net_pl }}</b></p>
-<p>Net Return %: {{ result.net_return_pct }}%</p>
-<p>Break-even Sale Price: ₹{{ result.break_even_price }}</p>
-{% endif %}
-"""
-
 def calc_trade(broker_key, qty, buy_price, sell_price, interest_cost):
     r = RATES[broker_key]
 
@@ -73,28 +31,22 @@ def calc_trade(broker_key, qty, buy_price, sell_price, interest_cost):
     sale_value = qty * sell_price
     gross_pl = sale_value - purchase_value
 
-    # Brokerage
     buy_brokerage = purchase_value * r["brokerage_per_leg"]
     sell_brokerage = sale_value * r["brokerage_per_leg"]
 
-    # STT
     stt_buy = purchase_value * r["stt_buy"]
     stt_sell = sale_value * r["stt_sell"]
 
-    # Stamp duty (only on buy)
     stamp_duty = purchase_value * r["stamp_buy"]
 
-    # Exchange + SEBI (both legs)
     exch_buy = purchase_value * r["exchange_txn"]
     exch_sell = sale_value * r["exchange_txn"]
     sebi_buy = purchase_value * r["sebi"]
     sebi_sell = sale_value * r["sebi"]
 
-    # GST on brokerage + exchange + sebi
     gst_base = buy_brokerage + sell_brokerage + exch_buy + exch_sell + sebi_buy + sebi_sell
     gst = gst_base * r["gst"]
 
-    # DP charges (delivery)
     dp = r["dp_charges"]
 
     total_charges = (
@@ -110,10 +62,6 @@ def calc_trade(broker_key, qty, buy_price, sell_price, interest_cost):
     net_pl = gross_pl - total_charges - interest_cost
     net_return_pct = (net_pl / purchase_value * 100) if purchase_value != 0 else 0
 
-    # Break-even sale price: sale price where net_pl = 0
-    # Let S = break-even sale price:
-    # Net P/L = (S*qty - purchase_value) - charges(S) - interest = 0
-    # Approximate by ignoring STT_sell dependence on S for simplicity:
     break_even_price = (purchase_value + total_charges + interest_cost) / qty
 
     return {
@@ -127,19 +75,23 @@ def calc_trade(broker_key, qty, buy_price, sell_price, interest_cost):
         "break_even_price": round(break_even_price, 2),
     }
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    result = None
-    if request.method == "POST":
-        broker = request.form.get("broker")
-        qty = int(request.form.get("qty"))
-        buy_price = float(request.form.get("buy_price"))
-        sell_price = float(request.form.get("sell_price"))
-        interest = float(request.form.get("interest") or 0)
+st.title("Equity Profit Calculator")
 
-        result = calc_trade(broker, qty, buy_price, sell_price, interest)
+broker = st.selectbox("Broker", ["KOTAK_DELIVERY", "ZERODHA_DELIVERY"])
+qty = st.number_input("Quantity", min_value=1, step=1)
+buy_price = st.number_input("Purchase Price", min_value=0.0, step=0.01)
+sell_price = st.number_input("Sale Price", min_value=0.0, step=0.01)
+interest = st.number_input("Interest Cost (₹)", min_value=0.0, step=0.01)
 
-    return render_template_string(HTML, result=result)
+if st.button("Calculate"):
+    result = calc_trade(broker, qty, buy_price, sell_price, interest)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    st.subheader("Result")
+    st.write(f"Purchase Value: ₹{result['purchase_value']}")
+    st.write(f"Sale Value: ₹{result['sale_value']}")
+    st.write(f"Gross P/L: ₹{result['gross_pl']}")
+    st.write(f"Total Charges: ₹{result['total_charges']}")
+    st.write(f"Interest Cost: ₹{result['interest_cost']}")
+    st.write(f"**Net P/L: ₹{result['net_pl']}**")
+    st.write(f"Net Return %: {result['net_return_pct']}%")
+    st.write(f"Break-even Sale Price: ₹{result['break_even_price']}")
