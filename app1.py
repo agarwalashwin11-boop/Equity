@@ -163,6 +163,7 @@ for i, col in enumerate(trade_columns, start=1):
     with col:
         st.subheader(f"Trade {i}")
         with st.form(f"trade_form_{i}"):
+
             broker = st.selectbox("Broker", ["Kotak", "Zerodha"], index=1 if i == 1 else 0, key=f"broker_{i}")
             scrip = st.text_input("Stock / Scrip", key=f"scrip_{i}")
             trade_type = st.selectbox("Trade Type", ["Delivery", "Intraday"], key=f"type_{i}")
@@ -170,9 +171,27 @@ for i, col in enumerate(trade_columns, start=1):
             quantity = st.number_input("Quantity", min_value=0, step=1, value=100 if i == 1 else 0, key=f"qty_{i}")
             purchase_date = st.date_input("Purchase Date", value=date(2026, 7, 9) if i == 1 else date.today(), key=f"pdate_{i}")
             purchase_price = st.number_input("Purchase Price", min_value=0.0, step=0.01, format="%.2f", value=1000.0 if i == 1 else 0.0, key=f"pprice_{i}")
+
+            # FIXED SECTION — always show fields, only disable when sale not completed
             sale_completed = st.checkbox("Sale completed", value=False, key=f"sold_{i}")
-            sale_date = st.date_input("Sale Date", value=date.today(), disabled=not sale_completed, key=f"sdate_{i}") if sale_completed else None
-            sale_price = st.number_input("Sale Price", min_value=0.0, step=0.01, format="%.2f", value=0.0, disabled=not sale_completed, key=f"sprice_{i}")
+
+            sale_date = st.date_input(
+                "Sale Date",
+                value=date.today(),
+                disabled=not sale_completed,
+                key=f"sdate_{i}"
+            )
+
+            sale_price = st.number_input(
+                "Sale Price",
+                min_value=0.0,
+                step=0.01,
+                format="%.2f",
+                value=0.0,
+                disabled=not sale_completed,
+                key=f"sprice_{i}"
+            )
+
             submitted = st.form_submit_button("Calculate", use_container_width=True)
 
         validation_error = None
@@ -188,7 +207,8 @@ for i, col in enumerate(trade_columns, start=1):
                 "Broker": broker, "Stock / Scrip": scrip, "Trade Type": trade_type,
                 "Funding Type": funding, "Quantity": quantity,
                 "Purchase Date": purchase_date, "Purchase Price": purchase_price,
-                "Sale Date": sale_date, "Sale Price": sale_price,
+                "Sale Date": sale_date if sale_completed else None,
+                "Sale Price": sale_price if sale_completed else 0.0,
             }
             result = calculate_trade(payload)
             render_outputs(result)
@@ -204,3 +224,4 @@ if all_results:
     c1.metric("Purchase Value", money(total_purchase))
     c2.metric("Total Charges", money(total_charges))
     c3.metric("Net Profit / (Loss)", money(total_net))
+
