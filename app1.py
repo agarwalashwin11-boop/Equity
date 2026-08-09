@@ -56,6 +56,9 @@ for i in range(4):
 
 df = pd.DataFrame(initial_data, columns=columns)
 
+# FIX: Change index to 1,2,3,4
+df.index = df.index + 1
+
 # ============================
 # CALCULATION LOGIC
 # ============================
@@ -136,7 +139,7 @@ def compute_row(row):
 st.title("Trade Calculator App")
 st.write("Yellow = Input columns, Green = Calculated columns")
 
-# Correct column_config (NO styling, NO errors)
+# Correct column_config (NO styling)
 column_config = {}
 
 # Editable text columns
@@ -163,7 +166,8 @@ edited = st.data_editor(
     df,
     key="trade_editor",
     column_config=column_config,
-    use_container_width=True
+    use_container_width=True,
+    hide_index=False
 )
 
 # ============================
@@ -176,11 +180,14 @@ for idx, row in computed.iterrows():
     for col, val in calc.items():
         computed.at[idx, col] = val
 
+# FIX: Index should be 1,2,3,4
+computed.index = computed.index + 1
+
 # ============================
-# OUTPUT TABLE (NO STYLER)
+# OUTPUT TABLE
 # ============================
 st.subheader("Calculated Outputs")
-st.dataframe(computed, use_container_width=True)
+st.dataframe(computed, use_container_width=True, hide_index=False)
 
 # ============================
 # SUMMARY
@@ -191,4 +198,3 @@ c1.metric("Total Trades", int((computed["Quantity"] > 0).sum()))
 c2.metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
 c3.metric("Net P/L", round(computed["Net P/L"].sum(), 2))
 c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
-
