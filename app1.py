@@ -1,97 +1,141 @@
 import streamlit as st
+import pandas as pd
+from datetime import date
 
-# ---- Charges & Rates ----
+st.set_page_config(page_title="Trade Calculator App", layout="wide")
+
+# Static rates used to mirror the existing Excel model.
 RATES = {
-    "KOTAK_DELIVERY": {
-        "brokerage_per_leg": 1e-3,
-        "stt_buy": 1e-3,
-        "stt_sell": 1e-3,
-        "stamp_buy": 1.5e-4,
-        "exchange_txn": 3.07e-5,
-        "sebi": 1e-6,
-        "gst": 0.18,
-        "dp_charges": 0.0,
-    },
-    "ZERODHA_DELIVERY": {
-        "brokerage_per_leg": 0.0,
-        "stt_buy": 1e-3,
-        "stt_sell": 1e-3,
-        "stamp_buy": 1.5e-4,
-        "exchange_txn": 3.07e-5,
-        "sebi": 1e-6,
-        "gst": 0.18,
-        "dp_charges": 0.0,
-    }
+    "brokerage": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0001}, "Zerodha": {"Delivery": 0.0, "Intraday": 0.0001}},
+    "stt_buy": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0}, "Zerodha": {"Delivery": 0.001, "Intraday": 0.0}},
+    "stt_sell": {"Kotak": {"Delivery": 0.001, "Intraday": 0.00025}, "Zerodha": {"Delivery": 0.001, "Intraday": 0.00025}},
+    "stamp_duty": {"Kotak": {"Delivery": 0.00015, "Intraday": 0.00003}, "Zerodha": {"Delivery": 0.00015, "Intraday": 0.00003}},
+    "exchange": {"Kotak": {"Delivery": 0.0000307, "Intraday": 0.0000307}, "Zerodha": {"Delivery": 0.0000307, "Intraday": 0.0000307}},
+    "sebi": {"Kotak": {"Delivery": 0.000001, "Intraday": 0.000001}, "Zerodha": {"Delivery": 0.000001, "Intraday": 0.000001}},
+    "gst": {"Kotak": {"Delivery": 0.18, "Intraday": 0.18}, "Zerodha": {"Delivery": 0.18, "Intraday": 0.18}},
 }
 
-def calc_trade(broker_key, qty, buy_price, sell_price, interest_cost):
-    r = RATES[broker_key]
+columns = [
+    "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
+    "Purchase Value", "Sale Value", "Gross P/L", "Buy Brokerage", "Sell Brokerage", "STT - Buy", "STT - Sell", "Stamp Duty",
+    "Exchange Charges", "SEBI Charges", "GST", "Total Charges", "Interest Cost", "Net P/L", "Net Return %", "Break-even Sale Price"
+]
 
-    purchase_value = qty * buy_price
-    sale_value = qty * sell_price
+# Build a default DataFrame with 20 rows.
+initial_data = []
+for i in range(20):
+    initial_data.append([
+        "Kotak" if i == 0 else "Kotak",
+        "",
+        "Delivery" if i == 0 else "Delivery",
+        "Margin" if i == 0 else "Cash",
+        100 if i == 0 else 0,
+        date(2026, 7, 9) if i == 0 else None,
+        1000 if i == 0 else 0,
+        None,
+        1200 if i == 0 else 0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    ])
+
+df = pd.DataFrame(initial_data, columns=columns)
+
+# Helper functions.
+def compute_row(row):
+    broker = row["Broker"]
+    trade_type = row["Trade Type"]
+    funding_type = row["Funding Type"]
+    quantity = row["Quantity"]
+    purchase_date = row["Purchase Date"]
+    purchase_price = row["Purchase Price"]
+    sale_date = row["Sale Date"]
+    sale_price = row["Sale Price"]
+
+    purchase_value = quantity * purchase_price if quantity and purchase_price else 0
+    sale_value = quantity * sale_price if quantity and sale_price else 0
     gross_pl = sale_value - purchase_value
 
-    buy_brokerage = purchase_value * r["brokerage_per_leg"]
-    sell_brokerage = sale_value * r["brokerage_per_leg"]
+    broker_rate = RATES["brokerage"][broker][trade_type]
+    stt_buy_rate = RATES["stt_buy"][broker][trade_type]
+    stt_sell_rate = RATES["stt_sell"][broker][trade_type]
+    stamp_rate = RATES["stamp_duty"][broker][trade_type]
+    exch_rate = RATES["exchange"][broker][trade_type]
+    sebi_rate = RATES["sebi"][broker][trade_type]
+    gst_rate = RATES["gst"][broker][trade_type]
 
-    stt_buy = purchase_value * r["stt_buy"]
-    stt_sell = sale_value * r["stt_sell"]
+    buy_brokerage = purchase_value * broker_rate
+    sell_brokerage = sale_value * broker_rate
+    stt_buy = purchase_value * stt_buy_rate
+    stt_sell = sale_value * stt_sell_rate
+    stamp_duty = purchase_value * stamp_rate
+    exchange_charges = (purchase_value + sale_value) * exch_rate
+    sebi_charges = (purchase_value + sale_value) * sebi_rate
 
-    stamp_duty = purchase_value * r["stamp_buy"]
+    gst = (buy_brokerage + sell_brokerage + exchange_charges + sebi_charges) * gst_rate
+    total_charges = buy_brokerage + sell_brokerage + stt_buy + stt_sell + stamp_duty + exchange_charges + sebi_charges + gst
 
-    exch_buy = purchase_value * r["exchange_txn"]
-    exch_sell = sale_value * r["exchange_txn"]
-    sebi_buy = purchase_value * r["sebi"]
-    sebi_sell = sale_value * r["sebi"]
-
-    gst_base = buy_brokerage + sell_brokerage + exch_buy + exch_sell + sebi_buy + sebi_sell
-    gst = gst_base * r["gst"]
-
-    dp = r["dp_charges"]
-
-    total_charges = (
-        buy_brokerage + sell_brokerage +
-        stt_buy + stt_sell +
-        stamp_duty +
-        exch_buy + exch_sell +
-        sebi_buy + sebi_sell +
-        gst +
-        dp
-    )
+    if funding_type == "Margin" and purchase_date and sale_date:
+        days = (sale_date - purchase_date).days
+        interest_cost = purchase_value * 0.10 * days / 365 if days > 0 else 0
+    elif funding_type == "Margin" and purchase_date:
+        days = (date.today() - purchase_date).days
+        interest_cost = purchase_value * 0.10 * days / 365 if days > 0 else 0
+    else:
+        interest_cost = 0
 
     net_pl = gross_pl - total_charges - interest_cost
-    net_return_pct = (net_pl / purchase_value * 100) if purchase_value != 0 else 0
+    net_return = net_pl / purchase_value if purchase_value else 0
 
-    break_even_price = (purchase_value + total_charges + interest_cost) / qty
+    break_even = 0
+    if purchase_value > 0 and quantity > 0:
+        break_even = ((purchase_value + total_charges + interest_cost) / quantity)
 
     return {
-        "purchase_value": round(purchase_value, 2),
-        "sale_value": round(sale_value, 2),
-        "gross_pl": round(gross_pl, 2),
-        "total_charges": round(total_charges, 2),
-        "interest_cost": round(interest_cost, 2),
-        "net_pl": round(net_pl, 2),
-        "net_return_pct": round(net_return_pct, 2),
-        "break_even_price": round(break_even_price, 2),
+        "Purchase Value": purchase_value,
+        "Sale Value": sale_value,
+        "Gross P/L": gross_pl,
+        "Buy Brokerage": buy_brokerage,
+        "Sell Brokerage": sell_brokerage,
+        "STT - Buy": stt_buy,
+        "STT - Sell": stt_sell,
+        "Stamp Duty": stamp_duty,
+        "Exchange Charges": exchange_charges,
+        "SEBI Charges": sebi_charges,
+        "GST": gst,
+        "Total Charges": total_charges,
+        "Interest Cost": interest_cost,
+        "Net P/L": net_pl,
+        "Net Return %": net_return,
+        "Break-even Sale Price": break_even
     }
 
-st.title("Equity Profit Calculator")
+st.title("Trade Calculator App")
+st.write("Enter values in the yellow input columns. Calculated outputs appear in green columns.")
 
-broker = st.selectbox("Broker", ["KOTAK_DELIVERY", "ZERODHA_DELIVERY"])
-qty = st.number_input("Quantity", min_value=1, step=1)
-buy_price = st.number_input("Purchase Price", min_value=0.0, step=0.01)
-sell_price = st.number_input("Sale Price", min_value=0.0, step=0.01)
-interest = st.number_input("Interest Cost (₹)", min_value=0.0, step=0.01)
+editable_cols = ["Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"]
+calculated_cols = [col for col in columns if col not in editable_cols]
 
-if st.button("Calculate"):
-    result = calc_trade(broker, qty, buy_price, sell_price, interest)
+edited = st.data_editor(
+    df,
+    key="trade_editor",
+    disabled=calculated_cols,
+    column_order=columns,
+    use_container_width=True
+)
 
-    st.subheader("Result")
-    st.write(f"Purchase Value: ₹{result['purchase_value']}")
-    st.write(f"Sale Value: ₹{result['sale_value']}")
-    st.write(f"Gross P/L: ₹{result['gross_pl']}")
-    st.write(f"Total Charges: ₹{result['total_charges']}")
-    st.write(f"Interest Cost: ₹{result['interest_cost']}")
-    st.write(f"**Net P/L: ₹{result['net_pl']}**")
-    st.write(f"Net Return %: {result['net_return_pct']}%")
-    st.write(f"Break-even Sale Price: ₹{result['break_even_price']}")
+# Compute outputs for all rows.
+computed = edited.copy()
+for idx, row in computed.iterrows():
+    calc = compute_row(row)
+    for col, value in calc.items():
+        computed.at[idx, col] = value
+
+# Display summary metrics.
+summary_cols = st.columns(4)
+summary_cols[0].metric("Total Trades", int((computed["Quantity"] > 0).sum()))
+summary_cols[1].metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
+summary_cols[2].metric("Net P/L", round(computed["Net P/L"].sum(), 2))
+summary_cols[3].metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
+
+# Show the calculated result table beneath the editor.
+st.subheader("Calculated Outputs (Green columns in the sheet)")
+st.dataframe(computed, use_container_width=True, hide_index=True)
