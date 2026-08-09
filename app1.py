@@ -16,25 +16,29 @@ RATES = {
 }
 
 columns = [
-    "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
-    "Purchase Value", "Sale Value", "Gross P/L", "Buy Brokerage", "Sell Brokerage", "STT - Buy", "STT - Sell", "Stamp Duty",
-    "Exchange Charges", "SEBI Charges", "GST", "Total Charges", "Interest Cost", "Net P/L", "Net Return %", "Break-even Sale Price"
+    "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity",
+    "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
+    "Purchase Value", "Sale Value", "Gross P/L", "Buy Brokerage", "Sell Brokerage",
+    "STT - Buy", "STT - Sell", "Stamp Duty", "Exchange Charges", "SEBI Charges",
+    "GST", "Total Charges", "Interest Cost", "Net P/L", "Net Return %",
+    "Break-even Sale Price"
 ]
 
 # Build a default DataFrame with 20 rows.
 initial_data = []
 for i in range(20):
     initial_data.append([
-        "Kotak" if i == 0 else "Kotak",
+        "Kotak",
         "",
-        "Delivery" if i == 0 else "Delivery",
+        "Delivery",
         "Margin" if i == 0 else "Cash",
         100 if i == 0 else 0,
         date(2026, 7, 9) if i == 0 else None,
         1000 if i == 0 else 0,
         None,
         1200 if i == 0 else 0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        # 16 calculated fields (matching 16 calculated columns)
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     ])
 
 df = pd.DataFrame(initial_data, columns=columns)
@@ -85,9 +89,7 @@ def compute_row(row):
     net_pl = gross_pl - total_charges - interest_cost
     net_return = net_pl / purchase_value if purchase_value else 0
 
-    break_even = 0
-    if purchase_value > 0 and quantity > 0:
-        break_even = ((purchase_value + total_charges + interest_cost) / quantity)
+    break_even = ((purchase_value + total_charges + interest_cost) / quantity) if purchase_value > 0 and quantity > 0 else 0
 
     return {
         "Purchase Value": purchase_value,
