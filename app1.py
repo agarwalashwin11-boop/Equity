@@ -1,5 +1,4 @@
 from datetime import date
-import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Equity Trade – Net Profit Calculator", layout="wide")
@@ -199,4 +198,5 @@ for i, col in enumerate(trade_columns, start=1):
 if all_results:
     st.divider()
     st.subheader("Combined Summary")
-    total_purchase = sum(x["Purchase
+
+    total_purchase = sum(x["Purchase Value"] for x in
