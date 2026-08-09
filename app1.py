@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -136,9 +137,29 @@ def compute_row(row):
 st.title("Trade Calculator App")
 st.write("Yellow = Input columns, Green = Calculated columns")
 
+# Column coloring (Streamlit-supported)
+column_config = {}
+
+for col in editable_cols:
+    column_config[col] = st.column_config.TextColumn(
+        col,
+        help="Input column",
+        width="medium"
+    )
+
+for col in calculated_cols:
+    column_config[col] = st.column_config.NumberColumn(
+        col,
+        help="Calculated output",
+        width="medium",
+        disabled=True,
+        format="%.2f"
+    )
+
 edited = st.data_editor(
     df,
     key="trade_editor",
+    column_config=column_config,
     use_container_width=True
 )
 
@@ -153,18 +174,22 @@ for idx, row in computed.iterrows():
         computed.at[idx, col] = val
 
 # ============================
-# COLOR STYLING (OUTPUT ONLY)
+# OUTPUT TABLE (with colors)
 # ============================
-def highlight_cells(val, col):
-    if col in editable_cols:
-        return "background-color: #FFFACD"  # Yellow
-    else:
-        return "background-color: #DFFFD6"  # Green
+def color_table(df):
+    styled = df.style.apply(
+        lambda row: [
+            "background-color: #FFFACD" if col in editable_cols else "background-color: #DFFFD6"
+            for col in df.columns
+        ],
+        axis=1
+    ).format("{:.2f}")
+    return styled
 
-styled = computed.style.apply(
-    lambda row: [highlight_cells(row[col], col) for col in computed.columns],
-    axis=1
-).format("{:.2f}")
+styled_output = color_table(computed)
+
+st.subheader("Calculated Outputs (Colored)")
+st.dataframe(styled_output, use_container_width=True)
 
 # ============================
 # SUMMARY
@@ -175,9 +200,3 @@ c1.metric("Total Trades", int((computed["Quantity"] > 0).sum()))
 c2.metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
 c3.metric("Net P/L", round(computed["Net P/L"].sum(), 2))
 c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
-
-# ============================
-# OUTPUT TABLE
-# ============================
-st.subheader("Calculated Outputs (Colored)")
-st.dataframe(styled, use_container_width=True)
