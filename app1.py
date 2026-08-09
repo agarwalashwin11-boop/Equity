@@ -4,7 +4,9 @@ from datetime import date
 
 st.set_page_config(page_title="Trade Calculator App", layout="wide")
 
-# Static rates used to mirror the existing Excel model.
+# ============================
+# BROKERAGE RATE TABLE
+# ============================
 RATES = {
     "brokerage": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0001}, "Zerodha": {"Delivery": 0.0, "Intraday": 0.0001}},
     "stt_buy": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0}, "Zerodha": {"Delivery": 0.001, "Intraday": 0.0}},
@@ -15,6 +17,9 @@ RATES = {
     "gst": {"Kotak": {"Delivery": 0.18, "Intraday": 0.18}, "Zerodha": {"Delivery": 0.18, "Intraday": 0.18}},
 }
 
+# ============================
+# COLUMN DEFINITIONS
+# ============================
 columns = [
     "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity",
     "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
@@ -24,74 +29,89 @@ columns = [
     "Break-even Sale Price"
 ]
 
-# Build a default DataFrame with correct dtypes
+editable_cols = [
+    "Broker", "Stock / Scrip", "Trade Type", "Funding Type",
+    "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"
+]
+
+calculated_cols = [c for c in columns if c not in editable_cols]
+
+# ============================
+# INITIAL 4 ROWS
+# ============================
 initial_data = []
-for i in range(20):
+for i in range(4):
     initial_data.append([
         "Kotak",
         "",
         "Delivery",
-        "Margin" if i == 0 else "Cash",
-        int(100 if i == 0 else 0),          # Quantity must be int
-        date(2026, 7, 9) if i == 0 else None,
-        float(1000 if i == 0 else 0),
+        "Cash",
+        0,
         None,
-        float(1200 if i == 0 else 0),
-        # 16 calculated fields (all floats)
+        0.0,
+        None,
+        0.0,
         *([0.0] * 16)
     ])
 
 df = pd.DataFrame(initial_data, columns=columns)
 
-# Helper functions.
+# ============================
+# CALCULATION LOGIC
+# ============================
 def compute_row(row):
     broker = row["Broker"]
     trade_type = row["Trade Type"]
     funding_type = row["Funding Type"]
-    quantity = int(row["Quantity"]) if row["Quantity"] else 0
-    purchase_date = row["Purchase Date"]
-    purchase_price = float(row["Purchase Price"]) if row["Purchase Price"] else 0
-    sale_date = row["Sale Date"]
-    sale_price = float(row["Sale Price"]) if row["Sale Price"] else 0
 
-    purchase_value = quantity * purchase_price
-    sale_value = quantity * sale_price
+    qty = int(row["Quantity"]) if row["Quantity"] else 0
+    buy_price = float(row["Purchase Price"]) if row["Purchase Price"] else 0
+    sell_price = float(row["Sale Price"]) if row["Sale Price"] else 0
+
+    purchase_date = row["Purchase Date"]
+    sale_date = row["Sale Date"]
+
+    purchase_value = qty * buy_price
+    sale_value = qty * sell_price
     gross_pl = sale_value - purchase_value
 
-    broker_rate = RATES["brokerage"][broker][trade_type]
-    stt_buy_rate = RATES["stt_buy"][broker][trade_type]
-    stt_sell_rate = RATES["stt_sell"][broker][trade_type]
-    stamp_rate = RATES["stamp_duty"][broker][trade_type]
-    exch_rate = RATES["exchange"][broker][trade_type]
-    sebi_rate = RATES["sebi"][broker][trade_type]
+    # Rates
+    br = RATES["brokerage"][broker][trade_type]
+    stt_b = RATES["stt_buy"][broker][trade_type]
+    stt_s = RATES["stt_sell"][broker][trade_type]
+    stamp = RATES["stamp_duty"][broker][trade_type]
+    exch = RATES["exchange"][broker][trade_type]
+    sebi = RATES["sebi"][broker][trade_type]
     gst_rate = RATES["gst"][broker][trade_type]
 
-    buy_brokerage = purchase_value * broker_rate
-    sell_brokerage = sale_value * broker_rate
-    stt_buy = purchase_value * stt_buy_rate
-    stt_sell = sale_value * stt_sell_rate
-    stamp_duty = purchase_value * stamp_rate
-    exchange_charges = (purchase_value + sale_value) * exch_rate
-    sebi_charges = (purchase_value + sale_value) * sebi_rate
+    buy_brokerage = purchase_value * br
+    sell_brokerage = sale_value * br
+    stt_buy = purchase_value * stt_b
+    stt_sell = sale_value * stt_s
+    stamp_duty = purchase_value * stamp
+    exchange_charges = (purchase_value + sale_value) * exch
+    sebi_charges = (purchase_value + sale_value) * sebi
 
     gst = (buy_brokerage + sell_brokerage + exchange_charges + sebi_charges) * gst_rate
     total_charges = buy_brokerage + sell_brokerage + stt_buy + stt_sell + stamp_duty + exchange_charges + sebi_charges + gst
 
-    if funding_type == "Margin" and purchase_date and sale_date:
-        days = (sale_date - purchase_date).days
-        interest_cost = purchase_value * 0.10 * days / 365 if days > 0 else 0
-    elif funding_type == "Margin" and purchase_date:
-        days = (date.today() - purchase_date).days
+    # Interest
+    if funding_type == "Margin" and purchase_date:
+        if sale_date:
+            days = (sale_date - purchase_date).days
+        else:
+            days = (date.today() - purchase_date).days
         interest_cost = purchase_value * 0.10 * days / 365 if days > 0 else 0
     else:
         interest_cost = 0
 
     net_pl = gross_pl - total_charges - interest_cost
-    net_return = net_pl / purchase_value if purchase_value else 0
+    net_return = (net_pl / purchase_value) if purchase_value else 0
 
-    break_even = ((purchase_value + total_charges + interest_cost) / quantity) if purchase_value > 0 and quantity > 0 else 0
+    break_even = ((purchase_value + total_charges + interest_cost) / qty) if qty > 0 else 0
 
-    return {
+    # Round everything to 2 decimals
+    return {k: round(v, 2) for k, v in {
         "Purchase Value": purchase_value,
         "Sale Value": sale_value,
         "Gross P/L": gross_pl,
@@ -106,38 +126,68 @@ def compute_row(row):
         "Total Charges": total_charges,
         "Interest Cost": interest_cost,
         "Net P/L": net_pl,
-        "Net Return %": net_return,
+        "Net Return %": net_return * 100,
         "Break-even Sale Price": break_even
-    }
+    }.items()}
 
+# ============================
+# UI
+# ============================
 st.title("Trade Calculator App")
-st.write("Enter values in the yellow input columns. Calculated outputs appear in green columns.")
+st.write("Yellow = Input columns, Green = Calculated columns")
 
-editable_cols = ["Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"]
-calculated_cols = [col for col in columns if col not in editable_cols]
+# Column coloring
+column_styles = {}
+
+for col in editable_cols:
+    column_styles[col] = st.column_config.TextColumn(
+        col,
+        help="Input column",
+        width="medium",
+        required=False,
+        disabled=False,
+        style={"backgroundColor": "#FFFACD"}  # Light Yellow
+    )
+
+for col in calculated_cols:
+    column_styles[col] = st.column_config.NumberColumn(
+        col,
+        help="Calculated output",
+        width="medium",
+        disabled=True,
+        format="%.2f",
+        style={"backgroundColor": "#DFFFD6"}  # Light Green
+    )
 
 edited = st.data_editor(
     df,
     key="trade_editor",
-    disabled=calculated_cols,
-    column_order=columns,
+    column_config=column_styles,
     use_container_width=True
 )
 
-# Compute outputs for all rows.
+# ============================
+# COMPUTE ALL ROWS
+# ============================
 computed = edited.copy()
+
 for idx, row in computed.iterrows():
     calc = compute_row(row)
-    for col, value in calc.items():
-        computed.at[idx, col] = value
+    for col, val in calc.items():
+        computed.at[idx, col] = val
 
-# Display summary metrics.
-summary_cols = st.columns(4)
-summary_cols[0].metric("Total Trades", int((computed["Quantity"] > 0).sum()))
-summary_cols[1].metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
-summary_cols[2].metric("Net P/L", round(computed["Net P/L"].sum(), 2))
-summary_cols[3].metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
+# ============================
+# SUMMARY
+# ============================
+st.subheader("Summary")
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total Trades", int((computed["Quantity"] > 0).sum()))
+c2.metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
+c3.metric("Net P/L", round(computed["Net P/L"].sum(), 2))
+c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
 
-# Show the calculated result table beneath the editor.
-st.subheader("Calculated Outputs (Green columns in the sheet)")
+# ============================
+# OUTPUT TABLE
+# ============================
+st.subheader("Calculated Outputs")
 st.dataframe(computed, use_container_width=True, hide_index=True)
