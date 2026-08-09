@@ -138,8 +138,9 @@ def render_outputs(result: dict):
             f'<span class="output-value">{value}</span></div>'
         )
     st.markdown(
-        '<div class="output-card"><div class="output-title">Calculated Outputs</div>'
-        + "".join(rows) + "</div>",
+        '<div class="output-card"><div class="output-title">Calculated Outputs</div>' +
+        "".join(rows) +
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -163,21 +164,8 @@ for i, col in enumerate(trade_columns, start=1):
 
         sale_completed = st.checkbox("Sale completed", key=f"sold_{i}")
 
-        sale_date = st.date_input(
-            "Sale Date",
-            value=date.today(),
-            disabled=not sale_completed,
-            key=f"sdate_{i}"
-        )
-
-        sale_price = st.number_input(
-            "Sale Price",
-            min_value=0.0,
-            step=0.01,
-            format="%.2f",
-            disabled=not sale_completed,
-            key=f"sprice_{i}"
-        )
+        sale_date = st.date_input("Sale Date", value=date.today(), disabled=not sale_completed, key=f"sdate_{i}")
+        sale_price = st.number_input("Sale Price", min_value=0.0, step=0.01, format="%.2f", disabled=not sale_completed, key=f"sprice_{i}")
 
         payload = {
             "Broker": broker,
@@ -199,4 +187,11 @@ if all_results:
     st.divider()
     st.subheader("Combined Summary")
 
-    total_purchase = sum(x["Purchase Value"] for x in
+    total_purchase = sum(x["Purchase Value"] for x in all_results)
+    total_charges = sum(x["Total Charges"] for x in all_results)
+    total_net = sum(x["NET PROFIT / (LOSS)"] for x in all_results)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Purchase Value", money(total_purchase))
+    c2.metric("Total Charges", money(total_charges))
+    c3.metric("Net Profit / (Loss)", money(total_net))
