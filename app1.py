@@ -1,178 +1,206 @@
-import streamlit as st
-import pandas as pd
 from datetime import date
+import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="Trade Calculator App", layout="wide")
+st.set_page_config(page_title="Equity Trade – Net Profit Calculator", layout="wide")
 
-# ============================
-# BROKERAGE RATE TABLE
-# ============================
+# Rates matching the Excel "Charges & Rates" sheet.
 RATES = {
-    "brokerage": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0001}, "Zerodha": {"Delivery": 0.0, "Intraday": 0.0001}},
-    "stt_buy": {"Kotak": {"Delivery": 0.001, "Intraday": 0.0}, "Zerodha": {"Delivery": 0.001, "Intraday": 0.0}},
-    "stt_sell": {"Kotak": {"Delivery": 0.001, "Intraday": 0.00025}, "Zerodha": {"Delivery": 0.001, "Intraday": 0.00025}},
-    "stamp_duty": {"Kotak": {"Delivery": 0.00015, "Intraday": 0.00003}, "Zerodha": {"Delivery": 0.00015, "Intraday": 0.00003}},
-    "exchange": {"Kotak": {"Delivery": 0.0000307, "Intraday": 0.0000307}, "Zerodha": {"Delivery": 0.0000307, "Intraday": 0.0000307}},
-    "sebi": {"Kotak": {"Delivery": 0.000001, "Intraday": 0.000001}, "Zerodha": {"Delivery": 0.000001, "Intraday": 0.000001}},
-    "gst": {"Kotak": {"Delivery": 0.18, "Intraday": 0.18}, "Zerodha": {"Delivery": 0.18, "Intraday": 0.18}},
+    ("Kotak", "Delivery"): {
+        "brokerage": 0.001, "stt_buy": 0.001, "stt_sell": 0.001,
+        "stamp": 0.00015, "exchange": 0.000031, "sebi": 0.000001, "gst": 0.18,
+    },
+    ("Kotak", "Intraday"): {
+        "brokerage": 0.0001, "stt_buy": 0.0, "stt_sell": 0.00025,
+        "stamp": 0.00003, "exchange": 0.000031, "sebi": 0.000001, "gst": 0.18,
+    },
+    ("Zerodha", "Delivery"): {
+        "brokerage": 0.0, "stt_buy": 0.001, "stt_sell": 0.001,
+        "stamp": 0.00015, "exchange": 0.0000307, "sebi": 0.000001, "gst": 0.18,
+    },
+    ("Zerodha", "Intraday"): {
+        "brokerage": 0.0001, "stt_buy": 0.0, "stt_sell": 0.00025,
+        "stamp": 0.00003, "exchange": 0.0000307, "sebi": 0.000001, "gst": 0.18,
+    },
 }
 
-# ============================
-# COLUMN DEFINITIONS
-# ============================
-input_columns = [
-    "Broker", "Stock / Scrip", "Trade Type", "Funding Type",
-    "Quantity", "Purchase Date", "Purchase Price", "Sale Date", "Sale Price"
+INPUT_FIELDS = [
+    "Broker", "Stock / Scrip", "Trade Type", "Funding Type", "Quantity",
+    "Purchase Date", "Purchase Price", "Sale Date", "Sale Price",
+]
+OUTPUT_FIELDS = [
+    "Purchase Value", "Sale Value", "Gross Profit / (Loss)", "Buy Brokerage",
+    "Sell Brokerage", "STT - Buy", "STT - Sell", "Stamp Duty",
+    "Exchange Transaction Charges", "SEBI Charges", "GST", "Total Charges",
+    "Interest Cost (10% p.a.)", "NET PROFIT / (LOSS)", "Net Return %",
+    "Break-even Sale Price",
 ]
 
-calculated_columns = [
-    "Purchase Value", "Sale Value", "Gross P/L", "Buy Brokerage", "Sell Brokerage",
-    "STT - Buy", "STT - Sell", "Stamp Duty", "Exchange Charges", "SEBI Charges",
-    "GST", "Total Charges", "Interest Cost", "Net P/L", "Net Return %",
-    "Break-even Sale Price"
-]
-
-all_columns = input_columns + calculated_columns
-
-# ============================
-# INITIAL 4 ROWS
-# ============================
-initial_data = []
-for i in range(4):
-    initial_data.append([
-        "Kotak", "", "Delivery", "Cash",
-        0, None, 0.0, None, 0.0,
-        *([0.0] * len(calculated_columns))
-    ])
-
-df = pd.DataFrame(initial_data, columns=all_columns)
-
-# ============================
-# CALCULATION LOGIC
-# ============================
-def compute_row(row):
-    broker = row["Broker"]
-    trade_type = row["Trade Type"]
-    funding_type = row["Funding Type"]
-
-    qty = int(row["Quantity"]) if row["Quantity"] else 0
-    buy_price = float(row["Purchase Price"]) if row["Purchase Price"] else 0
-    sell_price = float(row["Sale Price"]) if row["Sale Price"] else 0
-
-    purchase_date = row["Purchase Date"]
-    sale_date = row["Sale Date"]
-
-    purchase_value = qty * buy_price
-    sale_value = qty * sell_price
-    gross_pl = sale_value - purchase_value
-
-    br = RATES["brokerage"][broker][trade_type]
-    stt_b = RATES["stt_buy"][broker][trade_type]
-    stt_s = RATES["stt_sell"][broker][trade_type]
-    stamp = RATES["stamp_duty"][broker][trade_type]
-    exch = RATES["exchange"][broker][trade_type]
-    sebi = RATES["sebi"][broker][trade_type]
-    gst_rate = RATES["gst"][broker][trade_type]
-
-    buy_brokerage = purchase_value * br
-    sell_brokerage = sale_value * br
-    stt_buy = purchase_value * stt_b
-    stt_sell = sale_value * stt_s
-    stamp_duty = purchase_value * stamp
-    exchange_charges = (purchase_value + sale_value) * exch
-    sebi_charges = (purchase_value + sale_value) * sebi
-
-    gst = (buy_brokerage + sell_brokerage + exchange_charges + sebi_charges) * gst_rate
-    total_charges = buy_brokerage + sell_brokerage + stt_buy + stt_sell + stamp_duty + exchange_charges + sebi_charges + gst
-
-    if funding_type == "Margin" and purchase_date:
-        if sale_date:
-            days = (sale_date - purchase_date).days
-        else:
-            days = (date.today() - purchase_date).days
-        interest_cost = purchase_value * 0.10 * days / 365 if days > 0 else 0
-    else:
-        interest_cost = 0
-
-    net_pl = gross_pl - total_charges - interest_cost
-    net_return = (net_pl / purchase_value) if purchase_value else 0
-    break_even = ((purchase_value + total_charges + interest_cost) / qty) if qty > 0 else 0
-
-    return {
-        "Purchase Value": round(purchase_value, 2),
-        "Sale Value": round(sale_value, 2),
-        "Gross P/L": round(gross_pl, 2),
-        "Buy Brokerage": round(buy_brokerage, 2),
-        "Sell Brokerage": round(sell_brokerage, 2),
-        "STT - Buy": round(stt_buy, 2),
-        "STT - Sell": round(stt_sell, 2),
-        "Stamp Duty": round(stamp_duty, 2),
-        "Exchange Charges": round(exchange_charges, 2),
-        "SEBI Charges": round(sebi_charges, 2),
-        "GST": round(gst, 2),
-        "Total Charges": round(total_charges, 2),
-        "Interest Cost": round(interest_cost, 2),
-        "Net P/L": round(net_pl, 2),
-        "Net Return %": round(net_return * 100, 2),
-        "Break-even Sale Price": round(break_even, 2)
-    }
-
-# ============================
-# UI
-# ============================
-st.title("Trade Calculator App")
-st.write("Yellow = Input columns, Green = Calculated columns")
-
-# Column config for input table
-column_config_input = {}
-
-for col in ["Broker", "Stock / Scrip", "Trade Type", "Funding Type"]:
-    column_config_input[col] = st.column_config.TextColumn(col)
-
-for col in ["Quantity", "Purchase Price", "Sale Price"]:
-    column_config_input[col] = st.column_config.NumberColumn(col, format="%.2f")
-
-for col in ["Purchase Date", "Sale Date"]:
-    column_config_input[col] = st.column_config.DateColumn(col)
-
-# ============================
-# FIRST TABLE (ONLY INPUT COLUMNS)
-# ============================
-input_df = df[input_columns]
-
-edited = st.data_editor(
-    input_df,
-    key="trade_editor",
-    column_config=column_config_input,
-    use_container_width=True,
-    hide_index=False
+st.markdown(
+    """
+    <style>
+      .block-container {padding-top: 1.25rem; max-width: 1500px;}
+      .title-band {background:#1f4e78;color:white;padding:14px 18px;border-radius:8px;
+                   font-size:25px;font-weight:700;margin-bottom:10px;}
+      .hint {color:#555;margin-bottom:14px;}
+      div[data-testid="stForm"] {background:#fff2cc;border:1px solid #d6b656;
+                                 padding:14px;border-radius:9px;}
+      .output-card {background:#e2f0d9;border:1px solid #70ad47;border-radius:9px;
+                    padding:12px 14px;margin-top:12px;}
+      .output-title {font-size:18px;font-weight:700;color:#385723;margin-bottom:6px;}
+      .output-row {display:flex;justify-content:space-between;gap:12px;
+                   border-bottom:1px solid #c6e0b4;padding:5px 0;}
+      .output-row:last-child {border-bottom:none;}
+      .output-label {color:#375623;}
+      .output-value {font-weight:700;color:#1f3b13;text-align:right;}
+      .warning-box {background:#fce4d6;border-left:5px solid #c65911;padding:9px 12px;
+                    margin-top:8px;border-radius:4px;}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-# ============================
-# COMPUTE OUTPUT
-# ============================
-computed = edited.copy()
+def money(value: float) -> str:
+    """Format currency to exactly two decimal places."""
+    sign = "-" if value < 0 else ""
+    return f"{sign}₹{abs(value):,.2f}"
 
-for idx, row in computed.iterrows():
-    calc = compute_row(row)
-    for col, val in calc.items():
-        computed.at[idx, col] = val
+def percent(value: float) -> str:
+    return f"{value:.2%}"
 
-# FIX: Index should be 1,2,3,4
-computed.index = computed.index + 1
+def calculate_trade(data: dict) -> dict:
+    broker = data["Broker"]
+    trade_type = data["Trade Type"]
+    funding = data["Funding Type"]
+    qty = float(data["Quantity"] or 0)
+    buy_price = float(data["Purchase Price"] or 0)
+    sell_price = float(data["Sale Price"] or 0)
+    purchase_date = data["Purchase Date"]
+    sale_date = data["Sale Date"]
+    r = RATES[(broker, trade_type)]
 
-# ============================
-# OUTPUT TABLE
-# ============================
-st.subheader("Calculated Outputs")
-st.dataframe(computed, use_container_width=True, hide_index=False)
+    buy_value = qty * buy_price
+    sell_value = qty * sell_price
+    gross_pl = sell_value - buy_value
 
-# ============================
-# SUMMARY
-# ============================
-st.subheader("Summary")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total Trades", int((computed["Quantity"] > 0).sum()))
-c2.metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
-c3.metric("Net P/L", round(computed["Net P/L"].sum(), 2))
-c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
+    buy_brokerage = buy_value * r["brokerage"]
+    sell_brokerage = sell_value * r["brokerage"]
+    stt_buy = buy_value * r["stt_buy"]
+    stt_sell = sell_value * r["stt_sell"]
+    stamp = buy_value * r["stamp"]
+    exchange = (buy_value + sell_value) * r["exchange"]
+    sebi = (buy_value + sell_value) * r["sebi"]
+    gst = (buy_brokerage + sell_brokerage + exchange + sebi) * r["gst"]
+
+    end_date = sale_date or date.today()
+    days = max((end_date - purchase_date).days, 0) if purchase_date else 0
+    interest = buy_value * 0.10 * days / 365 if funding == "Margin" else 0.0
+
+    transaction_charges = (
+        buy_brokerage + sell_brokerage + stt_buy + stt_sell + stamp
+        + exchange + sebi + gst
+    )
+    total_charges = transaction_charges + interest
+    net_pl = gross_pl - total_charges
+    net_return = net_pl / buy_value if buy_value else 0.0
+
+    # Break-even uses interest through today, as in the workbook.
+    be_days = max((date.today() - purchase_date).days, 0) if purchase_date else 0
+    be_interest = buy_value * 0.10 * be_days / 365 if funding == "Margin" else 0.0
+    buy_costs = buy_value * (r["brokerage"] + r["stt_buy"] + r["stamp"] + r["exchange"] + r["sebi"])
+    buy_gst = buy_value * (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
+    sell_cost_rate = r["brokerage"] + r["stt_sell"] + r["exchange"] + r["sebi"]
+    sell_gst_rate = (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
+    net_sale_per_share = 1 - sell_cost_rate - sell_gst_rate
+    break_even = (
+        (buy_value + buy_costs + buy_gst + be_interest) / (qty * net_sale_per_share)
+        if qty > 0 and net_sale_per_share > 0 else 0.0
+    )
+
+    return {
+        "Purchase Value": buy_value,
+        "Sale Value": sell_value,
+        "Gross Profit / (Loss)": gross_pl,
+        "Buy Brokerage": buy_brokerage,
+        "Sell Brokerage": sell_brokerage,
+        "STT - Buy": stt_buy,
+        "STT - Sell": stt_sell,
+        "Stamp Duty": stamp,
+        "Exchange Transaction Charges": exchange,
+        "SEBI Charges": sebi,
+        "GST": gst,
+        "Total Charges": total_charges,
+        "Interest Cost (10% p.a.)": interest,
+        "NET PROFIT / (LOSS)": net_pl,
+        "Net Return %": net_return,
+        "Break-even Sale Price": break_even,
+    }
+
+def render_outputs(result: dict) -> None:
+    rows = []
+    for label in OUTPUT_FIELDS:
+        value = percent(result[label]) if label == "Net Return %" else money(result[label])
+        rows.append(
+            f'<div class="output-row"><span class="output-label">{label}</span>'
+            f'<span class="output-value">{value}</span></div>'
+        )
+    st.markdown(
+        '<div class="output-card"><div class="output-title">Calculated Outputs</div>'
+        + "".join(rows) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+st.markdown('<div class="title-band">EQUITY TRADE – NET PROFIT CALCULATOR</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="hint">Enter details only in the yellow panels. Calculated results are displayed only in green panels. All amounts use two decimal places.</div>',
+    unsafe_allow_html=True,
+)
+
+trade_columns = st.columns(3, gap="medium")
+all_results = []
+
+for i, col in enumerate(trade_columns, start=1):
+    with col:
+        st.subheader(f"Trade {i}")
+        with st.form(f"trade_form_{i}"):
+            broker = st.selectbox("Broker", ["Kotak", "Zerodha"], index=1 if i == 1 else 0, key=f"broker_{i}")
+            scrip = st.text_input("Stock / Scrip", key=f"scrip_{i}")
+            trade_type = st.selectbox("Trade Type", ["Delivery", "Intraday"], key=f"type_{i}")
+            funding = st.selectbox("Funding Type", ["Margin", "Cash"], index=0 if i == 1 else 1, key=f"funding_{i}")
+            quantity = st.number_input("Quantity", min_value=0, step=1, value=100 if i == 1 else 0, key=f"qty_{i}")
+            purchase_date = st.date_input("Purchase Date", value=date(2026, 7, 9) if i == 1 else date.today(), key=f"pdate_{i}")
+            purchase_price = st.number_input("Purchase Price", min_value=0.0, step=0.01, format="%.2f", value=1000.0 if i == 1 else 0.0, key=f"pprice_{i}")
+            sale_completed = st.checkbox("Sale completed", value=False, key=f"sold_{i}")
+            sale_date = st.date_input("Sale Date", value=date.today(), disabled=not sale_completed, key=f"sdate_{i}") if sale_completed else None
+            sale_price = st.number_input("Sale Price", min_value=0.0, step=0.01, format="%.2f", value=0.0, disabled=not sale_completed, key=f"sprice_{i}")
+            submitted = st.form_submit_button("Calculate", use_container_width=True)
+
+        validation_error = None
+        if submitted and sale_completed and sale_price <= 0:
+            validation_error = "Sale Price is compulsory when Sale Date is entered."
+        if submitted and sale_price > 0 and not sale_completed:
+            validation_error = "Enter Sale Date before entering Sale Price."
+
+        if validation_error:
+            st.markdown(f'<div class="warning-box">{validation_error}</div>', unsafe_allow_html=True)
+        elif submitted:
+            payload = {
+                "Broker": broker, "Stock / Scrip": scrip, "Trade Type": trade_type,
+                "Funding Type": funding, "Quantity": quantity,
+                "Purchase Date": purchase_date, "Purchase Price": purchase_price,
+                "Sale Date": sale_date, "Sale Price": sale_price,
+            }
+            result = calculate_trade(payload)
+            render_outputs(result)
+            all_results.append(result)
+
+if all_results:
+    st.divider()
+    st.subheader("Combined Summary")
+    total_purchase = sum(x["Purchase Value"] for x in all_results)
+    total_charges = sum(x["Total Charges"] for x in all_results)
+    total_net = sum(x["NET PROFIT / (LOSS)"] for x in all_results)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Purchase Value", money(total_purchase))
+    c2.metric("Total Charges", money(total_charges))
+    c3.metric("Net Profit / (Loss)", money(total_net))
