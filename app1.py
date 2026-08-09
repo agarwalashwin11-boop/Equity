@@ -177,22 +177,10 @@ for idx, row in computed.iterrows():
         computed.at[idx, col] = val
 
 # ============================
-# COLOR OUTPUT TABLE (SAFE)
+# OUTPUT TABLE (NO STYLER)
 # ============================
-def color_table(df):
-    styled = df.style.apply(
-        lambda row: [
-            "background-color: #FFFACD" if col in editable_cols else "background-color: #DFFFD6"
-            for col in df.columns
-        ],
-        axis=1
-    ).format("{:.2f}")
-    return styled
-
-styled_output = color_table(computed)
-
-st.subheader("Calculated Outputs (Colored)")
-st.dataframe(styled_output, use_container_width=True)
+st.subheader("Calculated Outputs")
+st.dataframe(computed, use_container_width=True)
 
 # ============================
 # SUMMARY
@@ -203,3 +191,4 @@ c1.metric("Total Trades", int((computed["Quantity"] > 0).sum()))
 c2.metric("Gross P/L", round(computed["Gross P/L"].sum(), 2))
 c3.metric("Net P/L", round(computed["Net P/L"].sum(), 2))
 c4.metric("Win Rate", round((computed["Net P/L"] > 0).sum() / max((computed["Quantity"] > 0).sum(), 1), 3))
+
