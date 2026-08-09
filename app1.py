@@ -85,7 +85,8 @@ def calculate_trade(data: dict) -> dict:
     sebi = (buy_value + sell_value) * r["sebi"]
     gst = (buy_brokerage + sell_brokerage + exchange + sebi) * r["gst"]
 
-    end_date = sale_date or date.today()
+    # OPTION B — Interest even if sale not completed
+    end_date = sale_date if sale_date else date.today()
     days = max((end_date - purchase_date).days, 0)
     interest = buy_value * 0.10 * days / 365 if funding == "Margin" else 0.0
 
@@ -97,6 +98,7 @@ def calculate_trade(data: dict) -> dict:
     net_pl = gross_pl - total_charges
     net_return = net_pl / buy_value if buy_value else 0.0
 
+    # Break-even uses interest through today
     be_days = max((date.today() - purchase_date).days, 0)
     be_interest = buy_value * 0.10 * be_days / 365 if funding == "Margin" else 0.0
     buy_costs = buy_value * (r["brokerage"] + r["stt_buy"] + r["stamp"] + r["exchange"] + r["sebi"])
