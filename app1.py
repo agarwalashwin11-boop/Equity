@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -137,21 +136,25 @@ def compute_row(row):
 st.title("Trade Calculator App")
 st.write("Yellow = Input columns, Green = Calculated columns")
 
-# Column coloring (Streamlit-supported)
+# Correct column_config (NO styling, NO errors)
 column_config = {}
 
-for col in editable_cols:
-    column_config[col] = st.column_config.TextColumn(
-        col,
-        help="Input column",
-        width="medium"
-    )
+# Editable text columns
+for col in ["Broker", "Stock / Scrip", "Trade Type", "Funding Type"]:
+    column_config[col] = st.column_config.TextColumn(col)
 
+# Editable numeric columns
+for col in ["Quantity", "Purchase Price", "Sale Price"]:
+    column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
+
+# Editable date columns
+for col in ["Purchase Date", "Sale Date"]:
+    column_config[col] = st.column_config.DateColumn(col)
+
+# Calculated numeric columns (disabled)
 for col in calculated_cols:
     column_config[col] = st.column_config.NumberColumn(
         col,
-        help="Calculated output",
-        width="medium",
         disabled=True,
         format="%.2f"
     )
@@ -174,7 +177,7 @@ for idx, row in computed.iterrows():
         computed.at[idx, col] = val
 
 # ============================
-# OUTPUT TABLE (with colors)
+# COLOR OUTPUT TABLE (SAFE)
 # ============================
 def color_table(df):
     styled = df.style.apply(
