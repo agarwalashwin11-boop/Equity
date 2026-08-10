@@ -86,7 +86,6 @@ def calculate_trade(data: dict) -> dict:
     gst = (buy_brokerage + sell_brokerage + exchange + sebi) * r["gst"]
 
     # Interest logic (Option B)
-    # If sale not completed → use today's date
     end_date = sale_date if sale_date else date.today()
     days = max((end_date - purchase_date).days, 0)
     interest = buy_value * 0.10 * days / 365 if funding == "Margin" else 0.0
@@ -99,19 +98,24 @@ def calculate_trade(data: dict) -> dict:
     net_pl = gross_pl - total_charges
     net_return = net_pl / buy_value if buy_value else 0.0
 
-    # Break-even uses interest through today
-    be_days = max((date.today() - purchase_date).days, 0)
-    be_interest = buy_value * 0.10 * be_days / 365 if funding == "Margin" else 0.0
-    buy_costs = buy_value * (r["brokerage"] + r["stt_buy"] + r["stamp"] + r["exchange"] + r["sebi"])
-    buy_gst = buy_value * (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
-    sell_cost_rate = r["brokerage"] + r["stt_sell"] + r["exchange"] + r["sebi"]
-    sell_gst_rate = (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
-    net_sale_per_share = 1 - sell_cost_rate - sell_gst_rate
+    # Break-even uses SAME interest as NET PROFIT
+    be_interest = interest
 
-    break_even = (
-        (buy_value + buy_costs + buy_gst + be_interest) / (qty * net_sale_per_share)
-        if qty > 0 and net_sale_per_share > 0 else 0.0
-    )
+    # If sale completed → break-even must be zero
+    if sale_date:
+        break_even = 0.0
+    else:
+        sell_cost_rate = r["brokerage"] + r["stt_sell"] + r["exchange"] + r["sebi"]
+        sell_gst_rate = (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
+        net_sale_per_share = 1 - sell_cost_rate - sell_gst_rate
+
+        buy_costs = buy_value * (r["brokerage"] + r["stt_buy"] + r["stamp"] + r["exchange"] + r["sebi"])
+        buy_gst = buy_value * (r["brokerage"] + r["exchange"] + r["sebi"]) * r["gst"]
+
+        break_even = (
+            (buy_value + buy_costs + buy_gst + be_interest) / (qty * net_sale_per_share)
+            if qty > 0 and net_sale_per_share > 0 else 0.0
+        )
 
     return {
         "Purchase Value": buy_value,
@@ -170,7 +174,6 @@ for i, col in enumerate(trade_columns, start=1):
         sale_date = st.date_input("Sale Date", value=date.today(), disabled=not sale_completed, key=f"sdate_{i}")
         sale_price = st.number_input("Sale Price", min_value=0.0, step=0.01, format="%.2f", disabled=not sale_completed, key=f"sprice_{i}")
 
-        # FIX: If sale not completed → assume today's date for interest
         payload = {
             "Broker": broker,
             "Stock / Scrip": scrip,
@@ -179,7 +182,7 @@ for i, col in enumerate(trade_columns, start=1):
             "Quantity": quantity,
             "Purchase Date": purchase_date,
             "Purchase Price": purchase_price,
-            "Sale Date": sale_date if sale_completed else date.today(),
+            "Sale Date": sale_date if sale_completed else None,
             "Sale Price": sale_price if sale_completed else 0.0,
         }
 
@@ -199,4 +202,3 @@ if all_results:
     c1.metric("Purchase Value", money(total_purchase))
     c2.metric("Total Charges", money(total_charges))
     c3.metric("Net Profit / (Loss)", money(total_net))
-
