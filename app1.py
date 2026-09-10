@@ -28,7 +28,7 @@ OUTPUT_FIELDS = [
     "Sell Brokerage", "STT - Buy", "STT - Sell", "Stamp Duty",
     "Exchange Transaction Charges", "SEBI Charges", "GST", "Total Charges",
     "Interest Cost (10% p.a.)", "NET PROFIT / (LOSS)", "Net Return %",
-    "Annualised Return %", "CAGR Return %", "XIRR Return %",
+    "Annualised Return %",          # Only annualised kept
     "Break-even Sale Price",
 ]
 
@@ -99,30 +99,11 @@ def calculate_trade(data: dict) -> dict:
     net_pl = gross_pl - total_charges
     net_return = net_pl / buy_value if buy_value else 0.0
 
-    # Annualised Return
+    # Annualised Return (only this kept)
     if buy_value > 0 and days > 0:
         annualised_return = (1 + net_return) ** (365 / days) - 1
     else:
         annualised_return = 0.0
-
-    # CAGR Return
-    years = days / 365 if days > 0 else 0
-    if years > 0:
-        cagr_return = (1 + net_return) ** (1 / years) - 1
-    else:
-        cagr_return = 0.0
-
-    # XIRR Return (safe version)
-    if buy_value > 0 and days > 0:
-        raw_return = (sell_value - total_charges) / buy_value
-
-        # Prevent complex numbers
-        if 1 + raw_return > 0:
-            xirr_return = (1 + raw_return) ** (365 / days) - 1
-        else:
-            xirr_return = 0.0
-    else:
-        xirr_return = 0.0
 
     # Break-even uses SAME interest as NET PROFIT
     be_interest = interest
@@ -160,8 +141,6 @@ def calculate_trade(data: dict) -> dict:
         "NET PROFIT / (LOSS)": net_pl,
         "Net Return %": net_return,
         "Annualised Return %": annualised_return,
-        "CAGR Return %": cagr_return,
-        "XIRR Return %": xirr_return,
         "Break-even Sale Price": break_even,
     }
 
