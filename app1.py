@@ -112,10 +112,15 @@ def calculate_trade(data: dict) -> dict:
     else:
         cagr_return = 0.0
 
-    # XIRR Return (single cashflow version)
+    # XIRR Return (safe version)
     if buy_value > 0 and days > 0:
-        xirr_return = (sell_value - total_charges) / buy_value
-        xirr_return = (1 + xirr_return) ** (365 / days) - 1
+        raw_return = (sell_value - total_charges) / buy_value
+
+        # Prevent complex numbers
+        if 1 + raw_return > 0:
+            xirr_return = (1 + raw_return) ** (365 / days) - 1
+        else:
+            xirr_return = 0.0
     else:
         xirr_return = 0.0
 
