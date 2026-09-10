@@ -28,7 +28,7 @@ OUTPUT_FIELDS = [
     "Sell Brokerage", "STT - Buy", "STT - Sell", "Stamp Duty",
     "Exchange Transaction Charges", "SEBI Charges", "GST", "Total Charges",
     "Interest Cost (10% p.a.)", "NET PROFIT / (LOSS)", "Net Return %",
-    "Annualised Return %",          # Only annualised kept
+    "Annualised Return %",
     "Break-even Sale Price",
 ]
 
@@ -99,9 +99,12 @@ def calculate_trade(data: dict) -> dict:
     net_pl = gross_pl - total_charges
     net_return = net_pl / buy_value if buy_value else 0.0
 
-    # Annualised Return (only this kept)
+    # Annualised Return (safe version)
     if buy_value > 0 and days > 0:
-        annualised_return = (1 + net_return) ** (365 / days) - 1
+        if 1 + net_return > 0:
+            annualised_return = (1 + net_return) ** (365 / days) - 1
+        else:
+            annualised_return = 0.0
     else:
         annualised_return = 0.0
 
